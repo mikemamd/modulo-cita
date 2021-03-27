@@ -1,0 +1,99 @@
+<?php
+
+
+/**
+ * Implements hook_schema().
+ */
+function cita_schema() {
+  $schema["cita"] = array(
+    'description' => 'tabla de modulo Cita',
+    'fields' => array(
+       'id' => array(
+         'type' => 'serial',
+         'unsigned' => TRUE,
+         'not null' => TRUE,
+         'description' => 'id tabla modulo cita'
+       ),
+       'nombre_cliente' => array(
+         'type' => 'varchar',
+         'length' => 250,
+         'not null' => TRUE,
+         'default' => '0',
+         'description' => 'Nombre del cliente para la cita',
+       ),
+       'correo' => array(
+         'type' => 'varchar',
+         'length' => 100,
+         'not null' => TRUE,
+         'default' => '0',
+         'description' => 'Almacena el correo',
+       ),
+       'telefono' => array(
+         'type' => 'varchar',
+         'length' => 250,
+         'not null' => TRUE,
+         'default' => '0',
+         'description' => 'Almacena el telefono del cliente',
+       ),
+       'tid_modelo' => array(
+         'type' => 'int',
+         'not null' => TRUE,
+         'default' => '0',
+         'description' => 'Almacena el id taxonomy_term modelo',
+       ),
+       'tid_version' => array(
+         'type' => 'int',
+         'not null' => TRUE,
+         'default' => '0',
+         'description' => 'Almacena version del auto',
+       ),/*
+       'vin' => array(
+         'type' => 'varchar',
+         'length' => 250,
+         'not null' => TRUE,
+         'default' => '0',
+         'description' => 'VIN',
+       ),*/
+       'fecha' => array(
+         'type' => 'int',
+         'not null' => TRUE,
+         'default' => '0',
+         'description' => 'Almacena fecha tiempo en unixtime',
+       ),
+       'hora' => array(
+         'type' => 'varchar',
+         'length' => 250,
+         'not null' => TRUE,
+         'default' => '0',
+         'description' => 'Almacena horario (Matutino y Vespertino)',
+       ),
+       'tid_dilers' => array(
+         'type' => 'varchar',
+         'length' => 250,
+         'not null' => TRUE,
+         'default' => '0',
+         'description' => 'Almacena el distribuidor',
+       ),
+    ),
+    'primary key' => array('id'),
+  );
+
+  return $schema;
+}
+
+
+/**
+ * Implements hook_uninstall().
+ */
+function cita_uninstall() {
+  variable_del('cita_admin_nombre');
+  variable_del('cita_admin_email');
+  variable_del('cita_admin_telefono');
+  variable_del('cita_admin_modelo');
+  variable_del('cita_admin_version');
+  //variable_del('cita_admin_vin');
+  variable_del('cita_admin_fecha');
+  variable_del('cita_admin_horario');
+  variable_del('cita_admin_distribuidor');
+  variable_del('cita_admin_urlsend');
+}

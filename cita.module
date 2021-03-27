@@ -1,0 +1,534 @@
+<?php
+/**
+ * @file Modulo Citas
+ * @author Miguel Martínez <miguel01amd@gmail.com>
+ * @package Modules | Repo
+ * @info Agendado de citas para usuarios y vendedores
+ * @vertion dev 1.0.0.0
+ */
+
+/**
+ * Implements hook_menu().
+ */
+function cita_menu() {
+  $items = array();
+  $items['admin/config/cita/config'] = array(
+    'title'            => t('Agenda una Cita'),
+    'description'      => t('Configuracion de Agenda una cita'),
+    'page callback'    => 'drupal_get_form',
+    'page arguments'   => array('cita_admin_settings'),
+    'access arguments' => array('cita administer'),
+    'file'             => 'cita.admin.inc',
+  );
+  $items['admin/config/cita/config/settings'] = array(
+    'title'            => t('Citas Agendadas'),
+    'description'      => t('Configuración de las citas agendadas'),
+    'access arguments' => array('cita administer'),
+    'type'             => MENU_DEFAULT_LOCAL_TASK,
+    'weight'           => 1,
+  );
+  $items['admin/config/cita/config/mail'] = array(
+    'title'            => t('Settings of email'),
+    'description'      => t('Settings of format to send email'),
+    'page callback'    => 'drupal_get_form',
+    'page arguments'   => array('cita_email_settings'),
+    'access arguments' => array('cita administer'),
+    'type'             => MENU_LOCAL_TASK,
+    'file'             => 'cita.admin.inc',
+    'weight'           => 2,
+  );
+  $items['admin/config/cita/delete/%'] = array(
+    'title'            => t('Delete Cita'),
+    'description'      => t('Delete registry to cita'),
+    'page callback'    => 'drupal_get_form',
+    'page arguments'   => array('cita_admin_delete_form', 5),
+    'access arguments' => array('cita administer'),
+    'file'             => 'cita.admin.inc',
+  );
+  $items['agregar-cita'] = array(
+    'title'            => t('Cita'),
+    'description'      => t('Agregado de citas'),
+    'page callback'    => 'cita_page_empty',
+    'access arguments' => array('cita content'),
+  );
+
+  return $items;
+}
+
+/**
+ * @info Define empty page
+ * @return (string)
+*/
+function cita_page_empty() {
+  return '';
+}
+
+/**
+ * Implements hook_permission().
+ */
+function cita_permission() {
+  return array(
+    'cita administer' => array(
+      'title' => t('Citas administer'),
+    ),
+    'cita content' => array(
+      'title' => t('Citas content'),
+    )
+  );
+}
+
+/**
+ * Implements hook_block_info().
+ */
+function cita_block_info() {
+  $blocks = array();
+  $blocks["cita_block"] = array(
+    'info'       => t('Citas block'),
+    'weight'     => 1,
+    'status'     => TRUE,
+    'region'     => 'content',
+    'cache'      => DRUPAL_NO_CACHE,
+    'visibility' => BLOCK_VISIBILITY_LISTED,
+    'pages'      => 'agregar-cita',
+  );
+
+  return $blocks;
+}
+
+/**
+ * Implements hook_block_view().
+ *
+ */
+
+function cita_block_view($delta = '') {
+  $block = array();
+  global $base_url;
+  if(user_access('cita content')){
+
+    $block['content'] = cita_block_page();
+  }else{
+    $block['content'] = t('Not access view content');
+  }
+
+  return $block;
+}
+
+/*
+ * Implements
+ *
+ */
+function cita_block_page(){
+  $form   = drupal_get_form("cita_block_form");
+  $result = theme('custom_page_cita', array('form' => $form));
+
+  return $result;
+}
+
+/*
+ * Implements
+ *
+ */
+function cita_block_form($form, &$form_state){
+  //  External Functions
+  $modelo         = get_cookie('modelo');
+  $version        = get_cookie('version');
+  $items_vehiculo = get_first_dropdown();
+  $selected       = $selectedversion = 0;
+
+  if ( isset($modelo) && !empty($modelo) ) {
+    $selected = $modelo['tid'];
+  }//end if
+  if ( isset($version) && !empty($version) ) {
+    $selectedversion = $version['tid'];
+  }//end if
+
+  if( isset($form_state['values']['modelo_cita']) && !empty($form_state['values']['modelo_cita']) ){
+    $selected = $form_state['values']['modelo_cita'];
+  }//end if
+
+  $form['nombrecliente_cita'] = array(
+    '#type'           => 'textfield',
+    '#title'          => t('Ingresa tu nombre completo'),
+    '#title_display'  => 'before',
+    '#default_value'  => '',
+    '#attributes'     => array( 'class' => array('validate'),'id' => t('nombrecliente_cita') ),
+    '#theme_wrappers' => array(),
+  );
+  $form['email_cita'] = array(
+    '#type'           => 'emailfield',
+    '#title'          => t('¿Cu&aacute;l es tu correo electr&oacute;nico?'),
+    '#title_display'  => 'before',
+    '#default_value'  => '',
+    '#attributes'     => array( 'class' => array('validate') , 'id' => t('email_cita') ),
+    '#theme_wrappers' => array(),
+  );
+  $form['telefono_cita'] = array(
+    '#type'           => 'numberfield',
+    '#title'          => t('Tel&eacute;fono de contacto'),
+    '#title_display'  => 'before',
+    '#default_value'  => '',
+    '#max'            => 9999999999,
+    '#attributes'     => array('class' => array('validate'), 'id' => t('telefono_cita') ),
+    '#theme_wrappers' => array(),
+  );
+  //dropdown_first
+  $form['modelo_cita'] = array(
+    '#type'          => 'select',
+    '#options'       => $items_vehiculo,
+    '#default_value' => $selected,
+    '#ajax' => array(
+      'callback' => 'cita_dependent_dropdown_callback',
+      'wrapper'  => 'dropdown-modelos-replace',
+    ),
+  );
+  //dropdown_second
+  $form['version_cita'] = array(
+    '#type'          => 'select',
+    '#prefix'        => '<div id="dropdown-modelos-replace">',
+    '#suffix'        => '</div>',
+    '#options'       => cita_get_second_dropdown($selected),
+    '#default_value' => $selectedversion,
+  );
+  /*$form['vin_cita'] = array(
+    '#type'           => 'textfield',
+    '#title'          => t('Ingresa tu VIN '),
+    '#title_display'  => 'before',
+    '#default_value'  => '',
+    '#attributes'     => array( 'class' => array('validate'),'id' => t('vin_cita') ),
+    '#theme_wrappers' => array(),
+  );*/
+  $form['fecha_cita'] = array(
+    '#type'           => 'textfield',
+    '#title'          => t('Fecha'),
+    '#title_display'  => 'before',
+    '#default_value'  => '',
+    '#attributes'     => array( 'class' => array('datepicker'), 'id' => t('fecha_cita') ),
+    '#theme_wrappers' => array(),
+  );
+  $form['hora_cita'] = array(
+    '#type'           => 'select',
+    '#title'          => t('Hora'),
+    '#title_display'  => 'before',
+    '#options'        => array( 0 => "Horario" , 1 => "Matutino" , 2 => "Vespertino" ),
+    '#default_value'  => '',
+    '#attributes'     => array( 'title' => t('Hora') , 'class' => array('select-wrapper'), 'id' => t('hora_cita') ),
+    '#theme_wrappers' => array(),
+  );
+  $form['distribuidor_cita'] = array(
+    '#type'           => 'textfield',
+    '#title'          => t('Distribuidor'),
+    '#title_display'  => 'before',
+    '#default_value'  => '',
+    '#attributes'     => array( 'placeholder' => t('Código Postal') , 'class' => array('select-wrapper'), 'id' => t('distribuidor_cita') ),
+    '#theme_wrappers' => array(),
+  );
+  $form['distribuidor_tid_cita'] = array(
+    '#type'           => 'hidden',
+    '#title'          => t('Distribuidor'),
+    '#title_display'  => 'before',
+    '#default_value'  => '',
+    '#attributes'     => array( 'placeholder' => t('Código Postal') , 'class' => array('select-wrapper'), 'id' => t('distribuidor_tid') ),
+    '#theme_wrappers' => array()
+  );
+  $form['submit'] = array(
+      '#type'       => 'submit' ,
+      '#value'      => t('Envía'),
+      '#attributes' => array('class' => array('boton disabled'))
+  );
+
+  $form["#submit"][]       = 'cita_block_form_submit';
+  $form['#theme']          = 'form_cita';
+  $form['#theme_wrappers'] = array('form');
+  return $form;
+}
+
+/*
+ *
+ */
+function cita_block_form_submit($form, &$form_state){
+  if(is_numeric($form_state['values']['distribuidor_tid_cita'])){
+    $term     = taxonomy_term_load($form_state['values']['distribuidor_tid_cita']);
+    $termname = $term->name;
+
+    $tid = (!empty($form_state['values']['version_cita'])) ? $form_state['values']['version_cita'] : $form_state['values']['modelo_cita'];
+    $email_model = cita_email_modelo($tid);
+    $fecha_unix  = cita_get_date($form_state['values']['fecha_cita']);
+
+    $insert = db_insert('cita')
+      ->fields(array(
+        'nombre_cliente' => $form_state['values']['nombrecliente_cita'],
+        'correo'         => $form_state['values']['email_cita'],
+        'telefono'       => $form_state['values']['telefono_cita'],
+        'tid_modelo'     => $form_state['values']['modelo_cita'],
+        'tid_version'    => $form_state['values']['version_cita'],
+        //'vin'            => $form_state['values']['vin_cita'],
+        'fecha'          => $fecha_unix,
+        'hora'           => $form_state['values']['hora_cita'],
+        'tid_dilers'     => $termname,
+      ))
+      ->execute();
+
+    $module   = 'cita';
+    $key      = 'contact_message';
+    $language = language_default();
+    $params   = array(
+      'nombre_cliente' => $form_state['values']['nombrecliente_cita'],
+      'correo'         => $form_state['values']['email_cita'],
+      'telefono'       => $form_state['values']['telefono_cita'],
+      'tid_modelo'     => $form_state['values']['modelo_cita'],
+      'tid_version'    => $form_state['values']['version_cita'],
+      //'vin'            => $form_state['values']['vin_cita'],
+      'fecha'          => $form_state['values']['fecha_cita'],
+      'hora'           => $form_state['values']['hora_cita'],
+      'cp'             => $form_state['values']['distribuidor_cita'],
+      'title_policy'   => variable_get('mail_title',''),
+      'content_policy' => variable_get('mail_policy',''),
+      'spacer'         => cita_find_img(variable_get('spacer_img','')),
+      'logo'           => cita_find_img(variable_get('logo_img','')),
+      'car_name'       => $email_model['name'],
+      'car_img'        => cita_find_img($email_model['img']),
+      'dealer_name'    => $termname,
+      'dealer_direc'   => $term->description,
+      'dealer_tel'     => $term->field_telefono['und']['0']['value'],
+    );
+
+    if( isset($term->field_email["und"][0]["value"]) && !empty($term->field_email["und"][0]["value"]) ){
+      $admin_mail = $term->field_email["und"][0]["value"];
+      $to         = $admin_mail;
+      $message    = drupal_mail($module, $key, $to, $language, $params, $from = NULL, $send = NULL);
+
+      $message['headers']['MIME-Version'] = '1.0';
+      $message['headers']['Content-Type'] = 'multipart/mixed;';
+      $message['headers']['Content-Type'] = 'text/html;';
+
+      $message['subject'] = 'Nueva cita agendanda';
+      $message['body'][]  = theme('cita_admin_mail', array('message' => $params));
+      $system             = drupal_mail_system($module, $key);
+      $message            = $system->format($message);
+      $message['result']  = $system->mail($message);
+      drupal_set_message(t('¡Gracias! Hemos recibido tu solicitud, en breve te contactaremos.'));
+    }//end if
+
+    $to      = $form_state['values']['email_cita'];
+    $message = drupal_mail($module, $key, $to, $language, $params, $from = NULL, $send = NULL);
+
+    $message['headers']['MIME-Version'] = '1.0';
+    $message['headers']['Content-Type'] = 'multipart/mixed;';
+    $message['headers']['Content-Type'] = 'text/html;';
+
+    $message['subject'] = '¡Cita Agregada!';
+    $message['body'][]  = theme('cita_user_mail', array('message' => $params));
+    $system             = drupal_mail_system($module, $key);
+    $message            = $system->format($message);
+    $message['result']  = $system->mail($message);
+    drupal_set_message(t('Se ha enviado un correo electronico'));
+  }
+}
+
+/**
+ * Función de retorno Ajax
+ * @return array.
+ */
+function cita_dependent_dropdown_callback($form, $form_state){
+    return $form['version_cita'];
+}
+
+/**
+ * Implements hook_validate()
+ */
+function cita_block_form_validate($form, &$form_state){
+  $tel_min   = strlen($form_state['values']['telefono_cita']);
+  $date      = strtotime(date("d-m-Y H:i:00",time()));
+  $date_form = cita_get_date($form_state['values']['fecha_cita']);
+
+  if ($form_state['values']['email_cita'] == null || !valid_email_address($form_state['values']['email_cita'])) {
+    form_set_error('email_cita', t('Ingrese un correo válido'));
+    return;
+  }
+  if (!is_numeric($form_state['values']['telefono_cita']) || $form_state['values']['telefono_cita'] == null || $tel_min < 8) {
+    form_set_error('telefono_cita', t('Ingrese un Teléfono válido'));
+    return;
+  }
+
+  if($form_state['values']['nombrecliente_cita'] == null){
+    form_set_error('nombrecliente', t('Ingrese un Nombre válido'));
+    return;
+  }
+  if(empty($form_state['values']['modelo_cita'])){
+    form_set_error('modelo', t('Ingrese un Modelo válido'));
+    return;
+  }/*
+  if($form_state['values']['vin_cita'] == null){
+    form_set_error('vin', t('Ingrese un VIN válido'));
+    return;
+  }*/
+  if($form_state['values']['fecha_cita'] == NULL || $date_form < $date){
+    form_set_error('fecha', t('Ingrese una Fecha válida'));
+    return;
+  }
+  if(empty($form_state['values']['hora_cita']) || $form_state['values']['hora_cita'] == 0){
+    form_set_error('hora', t('Ingrese un Horario válido'));
+    return;
+  }
+  if(!isset($form_state['values']['distribuidor_tid_cita']) || empty($form_state['values']['distribuidor_tid_cita'])){
+    form_set_error('distribuidor', t('Seleccione un distribuidor'));
+    return;
+  }
+}
+
+/**
+ * Devuelve la lista de vehiculos existentes.
+ * @return array.
+ */
+function cita_get_first_dropdown(){
+  $lista = [];
+  $vocab = taxonomy_vocabulary_machine_name_load('vehiculo');
+  $vid   = $vocab->vid;
+
+  $query = db_select('taxonomy_term_data', 'tx');
+  $query->leftJoin('taxonomy_term_hierarchy', 'tth', 'tth.tid = tx.tid');
+  $query->condition('tx.vid', $vid, '=')
+        ->condition('tth.parent', '0', '=');
+  $query->fields('tx', ['tid', 'name']);
+  $query->orderBy('weight', 'ASC');
+  $results = $query->execute()->fetchAll();
+
+  $lista[0] = '-Seleccione un vehículo';
+
+  if (isset($results) && !empty($results)) {
+    foreach ($results as $result) {
+      $lista[$result->tid] = $result->name;
+    }
+  }
+  return $lista;
+}
+
+/**
+ * Devuelve la lista de modelos existentes, según el vehiculo seleccionado.
+ * @return array.
+ */
+function cita_get_second_dropdown( $selected ){
+  $lista_modelos    = [];
+  $lista_modelos[0] = "-Seleccione Modelo-";
+
+  if (!empty($selected )) {
+    $query = db_select('taxonomy_term_data', 'tx');
+    $query->innerJoin('taxonomy_term_hierarchy', 'tth', 'tth.tid = tx.tid');
+    $query->condition('tth.parent', $selected, '=');
+    $query->fields('tx', ['tid', 'name']);
+    $query->orderBy('weight', 'ASC');
+    $results = $query->execute()->fetchAll();
+    if (isset($results) && !empty($results)) {
+      foreach ($results as $result) {
+        $lista_modelos[$result->tid] = $result->name;
+      }//end foreach
+    }
+    else {
+      $lista_modelos[0] = '*Sin Modelos por el momento';
+    }//end if
+  }//end if
+  return $lista_modelos;
+}
+
+/**
+ * Implements hook_theme().
+ */
+function cita_theme($existing, $type, $theme, $path) {
+  $theme = array();
+  $theme['custom_page_cita'] = array(
+    'variables' => array(
+      'items'   => array(),
+      'class'   => ''
+    ),
+    'template' => 'block-page_custom_cita',
+  );
+  $theme['form_cita'] = array(
+    'render element' => 'form',
+    'template'       => 'form-cita',
+  );
+  $theme['cita_user_mail'] = array(
+    'template'  => 'user-mail',
+    'arguments' => array('message' => ''),
+
+  );
+  $theme['cita_admin_mail'] = array(
+    'template'  => 'dist-mail',
+    'arguments' => array('message' => ''),
+  );
+
+
+  return $theme;
+}
+
+/**
+ * @info get url file by id file
+ * @param (int) $fid
+ * @return (string)
+ */
+function cita_find_img($fid){
+  if (isset($fid) && !empty($fid)) {
+    $file = file_load($fid);
+    $imguri = is_object($file) ? file_create_url($file->uri) : FALSE;
+  }
+  else {
+    $imguri = FALSE;
+  }
+  return $imguri;
+}
+
+/**
+ * Devuelve la información del vehiculo para mostrar en el correo
+ * @return array
+ */
+function cita_email_modelo($tid){
+  $query = db_select('taxonomy_term_data', 'ttd');
+  $query->innerJoin('field_data_field_imagen_vehiculoshover', 'fivh', 'fivh.entity_id = ttd.tid');
+  $query->condition('ttd.tid', $tid, '=');
+  $query->fields('ttd', ['tid', 'name'])
+        ->fields('fivh', ['field_imagen_vehiculoshover_fid']);
+  $results = $query->execute()->fetchAll();
+
+  if (isset($results) && !empty($results)) {
+    foreach ($results as $result) {
+      $values = [
+        'img'  => $result->field_imagen_vehiculoshover_fid,
+        'tid'  => $result->tid,
+        'name' => $result->name,
+      ];
+    }//end foreach
+  }//end if
+
+  return $values;
+}
+
+/*
+ * Devuelve la fecha en formato unixtime
+ * @return unixtime
+ */
+function cita_get_date($date) {
+  $fecha = explode(" ", $date);
+
+  $day   = $fecha[0];
+  $month = $fecha[1];
+  $year  = $fecha[2];
+
+  $new_month = [
+    "Enero,"      => "01",
+    "Febrero,"    => "02",
+    "Marzo,"      => "03",
+    "Abril,"      => "04",
+    "Mayo,"       => "05",
+    "Junio,"      => "06",
+    "Julio,"      => "07",
+    "Agosto,"     => "08",
+    "Septiembre," => "09",
+    "Octubre,"    => "10",
+    "Noviembre,"  => "11",
+    "Diciembre,"  => "12"
+  ];
+
+  $new_date  = $day."-".$new_month[$month]."-".$year;
+  $date_unix = strtotime($new_date);
+
+  return $date_unix;
+}
