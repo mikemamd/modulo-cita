@@ -1,0 +1,6 @@
+name = Modulo de Formulario de cita
+description = Agendado de citas para usuarios y vendedores
+package = Modules | Repo
+version = 1.0
+core = 7.x
+configure = admin/config/cita/settings
